@@ -1,0 +1,66 @@
+.dedicated-runner: &dedicated-runner
+  tags:
+    - Ubuntu_18.04
+
+.default-cache: &default-cache
+  key: "${CI_PIPELINE_ID}-${CI_COMMIT_SHA}"
+  paths:
+    - Makefile.config
+    - build
+    - .build_debug
+    - .build_release
+
+.push-cache: &push-cache
+  cache:
+    <<: *default-cache
+    policy: push
+
+.pull-cache: &pull-cache
+  cache:
+    <<: *default-cache
+    policy: pull
+
+
+before_script:
+  - export MAX_THREADS=`cat /proc/cpuinfo | grep "^processor" | wc -l`
+
+stages:
+  - setup
+  - build
+  - test
+  - deploy
+
+prepare:
+  stage: setup
+  <<: *dedicated-runner
+  <<: *push-cache
+  script:
+    - cp -f configs/Makefile.config.edge.ubuntu1804 Makefile.config
+
+build:
+  stage: build
+  <<: *dedicated-runner
+  cache:
+    <<: *default-cache
+  script:
+    - make -j$MAX_THREADS all pycaffe test
+#   - make warn
+
+test:
+  stage: test
+  <<: *dedicated-runner
+  <<: *pull-cache
+  script:
+    - make runtest
+    - make pytest
+#   - make lint
+
+deploy:
+  stage: deploy
+  <<: *dedicated-runner
+  <<: *pull-cache
+  artifacts:
+    paths:
+      - .distribute/
+  script:
+    - make distribute
